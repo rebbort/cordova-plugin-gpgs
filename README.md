@@ -116,7 +116,7 @@ document.addEventListener('deviceready', () => {
 
 The plugin NO LONGER attempts silent sign-in automatically; you are in full control of when the operation happens.
 
-The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`.
+The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`. When a server client ID is present, the payload also includes the scopes the plugin asked for and what Google actually granted: `requestedScopes` and `grantedScopes` (arrays of scope URIs).
 
 ### Authentication
 
@@ -153,20 +153,24 @@ GPGS.isSignedIn().then(result => {
 //   isSignedIn: boolean
 // }
 
-// Manual sign-in
+// Manual sign-in + scope logging
 GPGS.login().then(result => {
     console.log('Sign-in successful', result);
-    // result example:
+    console.log('Requested scopes:', result.requestedScopes);
+    console.log('Granted scopes:', result.grantedScopes);
+    // result example when SERVER_CLIENT_ID is set:
     // {
     //   isSignedIn: true,
     //   playerId: '1234567890123456789',
     //   username: 'Player One',
-    //   serverAuthCode: '4/0AX4XfW...'
+    //   serverAuthCode: '4/0AX4XfW...',
+    //   requestedScopes: ['openid','email','profile','https://www.googleapis.com/auth/games_lite'],
+    //   grantedScopes:   ['openid','email','profile','https://www.googleapis.com/auth/games_lite']
     // }
 }).catch(error => {
     console.error('Sign-in failed:', error);
 });
-// Returns: Promise<{ isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string }>
+// Returns: Promise<{ isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string, requestedScopes?: string[], grantedScopes?: string[] }>
 ```
 
 ### Leaderboards
