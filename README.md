@@ -58,6 +58,21 @@ A modern Cordova plugin for Google Play Games Services v2 API with comprehensive
 cordova plugin add cordova-plugin-gpgs --variable APP_ID="your-app-id" --variable PLAY_SERVICES_VERSION="23.2.0"
 ```
 
+To install directly from Git (e.g., the latest `main` branch or a fork), supply the repository URL and the same configuration variables:
+
+```bash
+cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git \
+  --variable APP_ID="your-app-id" \
+  --variable PLAY_SERVICES_VERSION="23.2.0" \
+  --variable SERVER_CLIENT_ID="your-server-client-id"
+```
+
+To pin a branch or tag, append `#branch_or_tag` to the URL:
+
+```bash
+cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git#main --variable APP_ID="your-app-id"
+```
+
 ### Configuration Variables
 
 - `APP_ID` (required): Your Google Play Games App ID
