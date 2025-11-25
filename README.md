@@ -77,7 +77,18 @@ cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git#main
 
 - `APP_ID` (required): Your Google Play Games App ID
 - `PLAY_SERVICES_VERSION` (optional): Version of Google Play Services to use (default: 23.2.0)
-- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens.
+- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens. When provided, the plugin now silently requests the OpenID Connect scopes (`openid email profile`) and ID token along with the server auth code so your backend receives an `id_token` during the exchange.
+
+  **How to obtain `SERVER_CLIENT_ID`:**
+  1. Open [Google Cloud Console](https://console.cloud.google.com/) for the project linked to your Play Games Services game (from Play Console → Game configuration → Linked apps → Google Cloud).
+  2. Go to **APIs & Services → Credentials**.
+  3. Under **OAuth 2.0 Client IDs**, create or pick a **Web application** client.
+  4. Copy its **Client ID** (looks like `1234567890-abcdefg.apps.googleusercontent.com`) and pass it as `SERVER_CLIENT_ID` when installing the plugin.
+  5. Use the same client ID (and matching redirect URI) on your backend when exchanging the `serverAuthCode` for tokens.
+
+When exchanging the returned `serverAuthCode`, ensure the Web client in Google Cloud Console has an **Authorized redirect URI** that matches your backend flow:
+- If Google Cloud Console rejects `postmessage`, register an HTTPS URI for your backend exchange endpoint (for example `https://api.example.com/oauth2/callback`) and pass the same value as `redirectUri` when calling `getToken` on the server.
+- If `postmessage` is allowed for your project, you can keep using it for mobile/JS code exchanges to avoid `redirect_uri_mismatch`.
 
 ## Configuration
 
@@ -86,6 +97,16 @@ Add the following to your `config.xml`:
 ```xml
 <preference name="GPGS_DEBUG" value="true" />
 ```
+
+To mirror the native debug log into the browser console/WebView, attach a logger callback after
+`deviceready`:
+
+```javascript
+GPGS.setLogger(message => console.log('[GPGS]', message));
+// Later, you can stop forwarding with:
+// GPGS.clearLogger();
+```
+The logger only emits when `GPGS_DEBUG` is enabled.
 
 ## Usage
 
@@ -105,7 +126,7 @@ document.addEventListener('deviceready', () => {
 
 The plugin NO LONGER attempts silent sign-in automatically; you are in full control of when the operation happens.
 
-The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`.
+The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`. When a server client ID is present, the payload also includes the scopes the plugin asked for and what Google actually granted: `requestedScopes` and `grantedScopes` (arrays of scope URIs).
 
 ### Authentication
 
@@ -142,20 +163,24 @@ GPGS.isSignedIn().then(result => {
 //   isSignedIn: boolean
 // }
 
-// Manual sign-in
+// Manual sign-in + scope logging
 GPGS.login().then(result => {
     console.log('Sign-in successful', result);
-    // result example:
+    console.log('Requested scopes:', result.requestedScopes);
+    console.log('Granted scopes:', result.grantedScopes);
+    // result example when SERVER_CLIENT_ID is set:
     // {
     //   isSignedIn: true,
     //   playerId: '1234567890123456789',
     //   username: 'Player One',
-    //   serverAuthCode: '4/0AX4XfW...'
+    //   serverAuthCode: '4/0AX4XfW...',
+    //   requestedScopes: ['openid','email','profile','https://www.googleapis.com/auth/games_lite'],
+    //   grantedScopes:   ['openid','email','profile','https://www.googleapis.com/auth/games_lite']
     // }
 }).catch(error => {
     console.error('Sign-in failed:', error);
 });
-// Returns: Promise<{ isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string }>
+// Returns: Promise<{ isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string, requestedScopes?: string[], grantedScopes?: string[] }>
 ```
 
 ### Leaderboards
