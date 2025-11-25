@@ -77,7 +77,18 @@ cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git#main
 
 - `APP_ID` (required): Your Google Play Games App ID
 - `PLAY_SERVICES_VERSION` (optional): Version of Google Play Services to use (default: 23.2.0)
-- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens.
+- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens. When provided, the plugin now silently requests the OpenID Connect scopes (`openid email profile`) and ID token along with the server auth code so your backend receives an `id_token` during the exchange.
+
+  **How to obtain `SERVER_CLIENT_ID`:**
+  1. Open [Google Cloud Console](https://console.cloud.google.com/) for the project linked to your Play Games Services game (from Play Console → Game configuration → Linked apps → Google Cloud).
+  2. Go to **APIs & Services → Credentials**.
+  3. Under **OAuth 2.0 Client IDs**, create or pick a **Web application** client.
+  4. Copy its **Client ID** (looks like `1234567890-abcdefg.apps.googleusercontent.com`) and pass it as `SERVER_CLIENT_ID` when installing the plugin.
+  5. Use the same client ID (and matching redirect URI) on your backend when exchanging the `serverAuthCode` for tokens.
+
+When exchanging the returned `serverAuthCode`, ensure the Web client in Google Cloud Console has an **Authorized redirect URI** that matches your backend flow:
+- If Google Cloud Console rejects `postmessage`, register an HTTPS URI for your backend exchange endpoint (for example `https://api.example.com/oauth2/callback`) and pass the same value as `redirectUri` when calling `getToken` on the server.
+- If `postmessage` is allowed for your project, you can keep using it for mobile/JS code exchanges to avoid `redirect_uri_mismatch`.
 
 ## Configuration
 
