@@ -58,10 +58,26 @@ A modern Cordova plugin for Google Play Games Services v2 API with comprehensive
 cordova plugin add cordova-plugin-gpgs --variable APP_ID="your-app-id" --variable PLAY_SERVICES_VERSION="23.2.0"
 ```
 
+To install directly from Git (e.g., the latest `main` branch or a fork), supply the repository URL and the same configuration variables:
+
+```bash
+cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git \
+  --variable APP_ID="your-app-id" \
+  --variable PLAY_SERVICES_VERSION="23.2.0" \
+  --variable SERVER_CLIENT_ID="your-server-client-id"
+```
+
+To pin a branch or tag, append `#branch_or_tag` to the URL:
+
+```bash
+cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git#main --variable APP_ID="your-app-id"
+```
+
 ### Configuration Variables
 
 - `APP_ID` (required): Your Google Play Games App ID
 - `PLAY_SERVICES_VERSION` (optional): Version of Google Play Services to use (default: 23.2.0)
+- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens.
 
 ## Configuration
 
@@ -88,6 +104,8 @@ document.addEventListener('deviceready', () => {
 ```
 
 The plugin NO LONGER attempts silent sign-in automatically; you are in full control of when the operation happens.
+
+The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`.
 
 ### Authentication
 
@@ -125,12 +143,19 @@ GPGS.isSignedIn().then(result => {
 // }
 
 // Manual sign-in
-GPGS.login().then(() => {
-    console.log('Sign-in successful');
+GPGS.login().then(result => {
+    console.log('Sign-in successful', result);
+    // result example:
+    // {
+    //   isSignedIn: true,
+    //   playerId: '1234567890123456789',
+    //   username: 'Player One',
+    //   serverAuthCode: '4/0AX4XfW...'
+    // }
 }).catch(error => {
     console.error('Sign-in failed:', error);
 });
-// Returns: Promise<void>
+// Returns: Promise<{ isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string }>
 ```
 
 ### Leaderboards
