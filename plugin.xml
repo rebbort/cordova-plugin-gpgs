@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <plugin
         id="cordova-plugin-gpgs"
-        version="0.0.4"
+        version="0.0.5"
         xmlns="http://apache.org/cordova/ns/plugins/1.0"
         xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:tools="http://schemas.android.com/tools"
@@ -23,6 +23,7 @@
         <preference name="APP_ID" />
         <preference name="PLAY_SERVICES_VERSION" default="23.2.0" />
         <preference name="GPGS_DEBUG" default="false" />
+        <preference name="SERVER_CLIENT_ID" />
 
         <config-file target="res/xml/config.xml" parent="/*">
             <feature name="GPGS">
@@ -45,6 +46,7 @@
 
         <config-file target="res/values/strings.xml" parent="/resources">
             <string name="app_id">$APP_ID</string>
+            <string name="server_client_id">$SERVER_CLIENT_ID</string>
         </config-file>
 
         <!-- Google Play Games Services -->

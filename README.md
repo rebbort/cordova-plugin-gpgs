@@ -62,6 +62,7 @@ cordova plugin add cordova-plugin-gpgs --variable APP_ID="your-app-id" --variabl
 
 - `APP_ID` (required): Your Google Play Games App ID
 - `PLAY_SERVICES_VERSION` (optional): Version of Google Play Services to use (default: 23.2.0)
+- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login
 
 ## Configuration
 
@@ -88,6 +89,8 @@ document.addEventListener('deviceready', () => {
 ```
 
 The plugin NO LONGER attempts silent sign-in automatically; you are in full control of when the operation happens.
+
+The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`.
 
 ### Authentication
 
@@ -125,12 +128,19 @@ GPGS.isSignedIn().then(result => {
 // }
 
 // Manual sign-in
-GPGS.login().then(() => {
-    console.log('Sign-in successful');
+GPGS.login().then(result => {
+    console.log('Sign-in successful', result);
+    // result example:
+    // {
+    //   isSignedIn: true,
+    //   playerId: '1234567890123456789',
+    //   username: 'Player One',
+    //   serverAuthCode: '4/0AX4XfW...'
+    // }
 }).catch(error => {
     console.error('Sign-in failed:', error);
 });
-// Returns: Promise<void>
+// Returns: Promise<{ isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string }>
 ```
 
 ### Leaderboards

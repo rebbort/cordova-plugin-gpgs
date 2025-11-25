@@ -100,7 +100,7 @@ var GPGS = {
 
     /**
      * Sign in to Google Play Games
-     * @returns {Promise<void>} Promise that resolves when sign-in is complete
+     * @returns {Promise<{isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string}>} Promise that resolves with sign-in details
      */
     login: function() {
         return new Promise((resolve, reject) => {

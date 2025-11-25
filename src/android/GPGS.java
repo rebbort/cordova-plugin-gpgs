@@ -54,6 +54,7 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -64,6 +65,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 import com.google.android.gms.games.achievement.Achievement;
 import com.google.android.gms.games.achievement.AchievementBuffer;
@@ -91,6 +93,7 @@ public class GPGS extends CordovaPlugin {
 
     private CordovaWebView cordovaWebView;
     private boolean wasSignedIn = false;
+    private String serverClientId = null;
 
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
@@ -103,6 +106,11 @@ public class GPGS extends CordovaPlugin {
             public void run() {
                 try {
                     PlayGamesSdk.initialize(cordova.getActivity());
+
+                    serverClientId = getStringResource("server_client_id");
+                    if (serverClientId != null && serverClientId.trim().isEmpty()) {
+                        serverClientId = null;
+                    }
 
                     // Check if signed in
                     GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
@@ -391,8 +399,7 @@ public class GPGS extends CordovaPlugin {
                         public void onComplete(@NonNull Task<AuthenticationResult> task) {
                             if (task.isSuccessful()) {
                                 wasSignedIn = true;
-                                emitSignInEvent(true);
-                                callbackContext.success();
+                                deliverSignInPayload(callbackContext);
                             } else {
                                 handleError(task.getException(), callbackContext);
                             }
@@ -948,6 +955,67 @@ public class GPGS extends CordovaPlugin {
         });
     }
 
+    private void deliverSignInPayload(@Nullable final CallbackContext callbackContext) {
+        final GamesSignInClient signInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
+        final PlayersClient playersClient = PlayGames.getPlayersClient(cordova.getActivity());
+
+        final Task<Player> playerTask = playersClient.getCurrentPlayer();
+        final Task<String> authCodeTask = serverClientId == null
+                ? Tasks.forResult(null)
+                : signInClient.requestServerSideAccess(serverClientId, false);
+
+        Tasks.whenAllComplete(Arrays.asList(playerTask, authCodeTask)).addOnCompleteListener(new OnCompleteListener<java.util.List<Task<?>>>() {
+            @Override
+            public void onComplete(@NonNull Task<java.util.List<Task<?>>> task) {
+                if (!playerTask.isSuccessful()) {
+                    handleError(playerTask.getException(), callbackContext);
+                    return;
+                }
+
+                if (serverClientId != null && !authCodeTask.isSuccessful()) {
+                    handleError(authCodeTask.getException(), callbackContext);
+                    return;
+                }
+
+                try {
+                    JSONObject payload = new JSONObject();
+                    payload.put("isSignedIn", true);
+
+                    Player player = playerTask.getResult();
+                    if (player != null) {
+                        payload.put("playerId", player.getPlayerId());
+                        payload.put("username", player.getDisplayName());
+                    }
+
+                    String authCode = authCodeTask.getResult();
+                    if (authCode != null) {
+                        payload.put("serverAuthCode", authCode);
+                    }
+
+                    emitSignInEvent(payload);
+
+                    if (callbackContext != null) {
+                        callbackContext.success(payload);
+                    }
+                } catch (JSONException e) {
+                    handleError(e, callbackContext);
+                }
+            }
+        });
+    }
+
+    private String getStringResource(String resourceName) {
+        try {
+            int resourceId = cordova.getActivity().getResources().getIdentifier(resourceName, "string", cordova.getActivity().getPackageName());
+            if (resourceId != 0) {
+                return cordova.getActivity().getString(resourceId);
+            }
+        } catch (Exception e) {
+            debugLog("GPGS - Failed to load string resource: " + resourceName, e);
+        }
+        return null;
+    }
+
     private void debugLog(String message) {
         if (debugMode) {
             Log.d(TAG, message);
@@ -1288,8 +1356,12 @@ public class GPGS extends CordovaPlugin {
         try {
             JSONObject payload = new JSONObject();
             payload.put("isSignedIn", isSignedIn);
-            emitWindowEvent(EVENT_SIGN_IN, payload);
+            emitSignInEvent(payload);
         } catch (JSONException ignored) { }
+    }
+
+    private void emitSignInEvent(@NonNull JSONObject payload) {
+        emitWindowEvent(EVENT_SIGN_IN, payload);
     }
 
     // Helper: emit sign-out event with detail { reason: string }
