@@ -77,7 +77,7 @@ cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git#main
 
 - `APP_ID` (required): Your Google Play Games App ID
 - `PLAY_SERVICES_VERSION` (optional): Version of Google Play Services to use (default: 23.2.0)
-- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login
+- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens.
 
 ## Configuration
 
