@@ -99,8 +99,13 @@ var GPGS = {
     },
 
     /**
-     * Sign in to Google Play Games
-     * @returns {Promise<{isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string}>} Promise that resolves with sign-in details
+     * Sign in to Google Play Games.
+     * When `SERVER_CLIENT_ID` is set during plugin installation, the resolved payload also includes
+     * the OAuth scope sets the plugin requested and what Google actually granted. These are the
+     * same values logged on Android when `GPGS_DEBUG` is enabled.
+     *
+     * @returns {Promise<{isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string, requestedScopes?: string[], grantedScopes?: string[]}>}
+     * Promise that resolves with sign-in details and, when available, scope metadata.
      */
     login: function() {
         return new Promise((resolve, reject) => {
