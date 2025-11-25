@@ -66,6 +66,7 @@ import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CordovaWebView;
+import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -106,6 +107,7 @@ public class GPGS extends CordovaPlugin {
     private CordovaWebView cordovaWebView;
     private boolean wasSignedIn = false;
     private String serverClientId = null;
+    private CallbackContext logCallbackContext = null;
 
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
@@ -199,6 +201,10 @@ public class GPGS extends CordovaPlugin {
         }
         else if (action.equals("isSignedIn")) {
             this.isSignedInAction(callbackContext);
+            return true;
+        }
+        else if (action.equals("setLogger")) {
+            this.setLoggerAction(args.optBoolean(0, true), callbackContext);
             return true;
         }
         else if (action.equals("unlockAchievement")) {
@@ -1123,6 +1129,19 @@ public class GPGS extends CordovaPlugin {
         return array;
     }
 
+    private void setLoggerAction(boolean enable, CallbackContext callbackContext) {
+        if (!enable) {
+            logCallbackContext = null;
+            callbackContext.success();
+            return;
+        }
+
+        logCallbackContext = callbackContext;
+        PluginResult pluginResult = new PluginResult(PluginResult.Status.NO_RESULT);
+        pluginResult.setKeepCallback(true);
+        callbackContext.sendPluginResult(pluginResult);
+    }
+
     private void logScopeRequest(AuthCodeResult result) {
         debugLog("GPGS - Requested scopes: " + result.requestedScopes.toString());
         debugLog("GPGS - Granted scopes: " + result.grantedScopes.toString());
@@ -1143,13 +1162,25 @@ public class GPGS extends CordovaPlugin {
     private void debugLog(String message) {
         if (debugMode) {
             Log.d(TAG, message);
+            sendLogToJs(message);
         }
     }
 
     private void debugLog(String message, Throwable throwable) {
         if (debugMode) {
             Log.d(TAG, message, throwable);
+            sendLogToJs(message);
         }
+    }
+
+    private void sendLogToJs(String message) {
+        if (logCallbackContext == null) {
+            return;
+        }
+
+        PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, message);
+        pluginResult.setKeepCallback(true);
+        logCallbackContext.sendPluginResult(pluginResult);
     }
 
     private void handleError(Exception e, CallbackContext callbackContext) {

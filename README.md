@@ -98,6 +98,16 @@ Add the following to your `config.xml`:
 <preference name="GPGS_DEBUG" value="true" />
 ```
 
+To mirror the native debug log into the browser console/WebView, attach a logger callback after
+`deviceready`:
+
+```javascript
+GPGS.setLogger(message => console.log('[GPGS]', message));
+// Later, you can stop forwarding with:
+// GPGS.clearLogger();
+```
+The logger only emits when `GPGS_DEBUG` is enabled.
+
 ## Usage
 
 ### Initialization
