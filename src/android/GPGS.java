@@ -27,6 +27,12 @@ import androidx.annotation.Nullable;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.Scope;
+import com.google.android.gms.common.Scopes;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.games.AnnotatedData;
 import com.google.android.gms.games.AuthenticationResult;
 import com.google.android.gms.games.EventsClient;
@@ -65,7 +71,13 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import com.google.android.gms.games.achievement.Achievement;
 import com.google.android.gms.games.achievement.AchievementBuffer;
@@ -960,9 +972,9 @@ public class GPGS extends CordovaPlugin {
         final PlayersClient playersClient = PlayGames.getPlayersClient(cordova.getActivity());
 
         final Task<Player> playerTask = playersClient.getCurrentPlayer();
-        final Task<String> authCodeTask = serverClientId == null
-                ? Tasks.forResult(null)
-                : signInClient.requestServerSideAccess(serverClientId, false);
+        final Task<AuthCodeResult> authCodeTask = serverClientId == null
+                ? Tasks.forResult(new AuthCodeResult(null, Collections.emptyList(), Collections.emptyList()))
+                : requestServerAuthCodeWithOpenId(signInClient);
 
         Tasks.whenAllComplete(Arrays.asList(playerTask, authCodeTask)).addOnCompleteListener(new OnCompleteListener<java.util.List<Task<?>>>() {
             @Override
@@ -987,9 +999,13 @@ public class GPGS extends CordovaPlugin {
                         payload.put("username", player.getDisplayName());
                     }
 
-                    String authCode = authCodeTask.getResult();
-                    if (authCode != null) {
-                        payload.put("serverAuthCode", authCode);
+                    AuthCodeResult authCodeResult = authCodeTask.getResult();
+                    if (authCodeResult != null) {
+                        if (authCodeResult.serverAuthCode != null) {
+                            payload.put("serverAuthCode", authCodeResult.serverAuthCode);
+                        }
+                        payload.put("requestedScopes", authCodeResult.requestedScopes);
+                        payload.put("grantedScopes", authCodeResult.grantedScopes);
                     }
 
                     emitSignInEvent(payload);
@@ -1002,6 +1018,114 @@ public class GPGS extends CordovaPlugin {
                 }
             }
         });
+    }
+
+    /**
+     * Request a server auth code that includes OpenID Connect scopes so the backend can obtain an id_token.
+     * Attempts a silent Google Sign-In with the expanded scopes first; if it cannot silently upgrade,
+     * falls back to the Play Games requestServerSideAccess call so login still succeeds.
+     */
+    private static class AuthCodeResult {
+        @Nullable
+        final String serverAuthCode;
+        @NonNull
+        final JSONArray requestedScopes;
+        @NonNull
+        final JSONArray grantedScopes;
+
+        AuthCodeResult(@Nullable String serverAuthCode, @NonNull Collection<String> requested, @NonNull Collection<String> granted) {
+            this.serverAuthCode = serverAuthCode;
+            this.requestedScopes = toJsonArray(requested);
+            this.grantedScopes = toJsonArray(granted);
+        }
+    }
+
+    private Task<AuthCodeResult> requestServerAuthCodeWithOpenId(GamesSignInClient signInClient) {
+        GoogleSignInOptions.Builder optionsBuilder = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
+                .requestServerAuthCode(serverClientId, true)
+                .requestIdToken(serverClientId)
+                .requestEmail()
+                .requestProfile()
+                .requestScopes(new Scope(Scopes.OPEN_ID), new Scope(Scopes.EMAIL), new Scope(Scopes.PROFILE));
+
+        GoogleSignInOptions signInOptions = optionsBuilder.build();
+        List<String> requestedScopeUris = scopeUrisFromArray(signInOptions.getScopeArray());
+
+        GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), signInOptions);
+
+        Task<GoogleSignInAccount> silentSignIn = googleClient.silentSignIn();
+        Task<AuthCodeResult> silentAuthCodeTask = silentSignIn.onSuccessTask(account -> {
+            if (account == null) {
+                return Tasks.forResult(new AuthCodeResult(null, requestedScopeUris, Collections.emptyList()));
+            }
+            List<String> grantedScopeUris = scopeUrisFromSet(account.getGrantedScopes());
+            return Tasks.forResult(new AuthCodeResult(account.getServerAuthCode(), requestedScopeUris, grantedScopeUris));
+        });
+
+        return silentAuthCodeTask.continueWithTask(task -> {
+            if (task.isSuccessful() && task.getResult() != null && task.getResult().serverAuthCode != null) {
+                logScopeRequest(task.getResult());
+                return Tasks.forResult(task.getResult());
+            }
+            // Fall back to Play Games request to keep legacy behavior if silent upgrade failed
+            return signInClient.requestServerSideAccess(serverClientId, true).continueWith(accessTask -> {
+                String authCode = accessTask.getResult();
+                List<String> grantedScopeUris = getGrantedScopesFromLastAccount();
+                AuthCodeResult result = new AuthCodeResult(authCode, requestedScopeUris, grantedScopeUris);
+                logScopeRequest(result);
+                return result;
+            });
+        });
+    }
+
+    private List<String> getGrantedScopesFromLastAccount() {
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(cordova.getActivity());
+        if (account == null || account.getGrantedScopes() == null) {
+            return Collections.emptyList();
+        }
+        return scopeUrisFromSet(account.getGrantedScopes());
+    }
+
+    private static List<String> scopeUrisFromArray(Scope[] scopes) {
+        if (scopes == null || scopes.length == 0) {
+            return Collections.emptyList();
+        }
+        List<String> uris = new ArrayList<>(scopes.length);
+        for (Scope scope : scopes) {
+            if (scope != null) {
+                uris.add(scope.getScopeUri());
+            }
+        }
+        return uris;
+    }
+
+    private static List<String> scopeUrisFromSet(Set<Scope> scopes) {
+        if (scopes == null || scopes.isEmpty()) {
+            return Collections.emptyList();
+        }
+        HashSet<String> uris = new HashSet<>(scopes.size());
+        for (Scope scope : scopes) {
+            if (scope != null) {
+                uris.add(scope.getScopeUri());
+            }
+        }
+        return new ArrayList<>(uris);
+    }
+
+    private static JSONArray toJsonArray(Collection<String> items) {
+        JSONArray array = new JSONArray();
+        if (items == null) {
+            return array;
+        }
+        for (String item : items) {
+            array.put(item);
+        }
+        return array;
+    }
+
+    private void logScopeRequest(AuthCodeResult result) {
+        debugLog("GPGS - Requested scopes: " + result.requestedScopes.toString());
+        debugLog("GPGS - Granted scopes: " + result.grantedScopes.toString());
     }
 
     private String getStringResource(String resourceName) {
