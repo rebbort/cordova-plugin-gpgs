@@ -27,6 +27,12 @@ import androidx.annotation.Nullable;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.Scope;
+import com.google.android.gms.common.Scopes;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.games.AnnotatedData;
 import com.google.android.gms.games.AuthenticationResult;
 import com.google.android.gms.games.EventsClient;
@@ -962,7 +968,7 @@ public class GPGS extends CordovaPlugin {
         final Task<Player> playerTask = playersClient.getCurrentPlayer();
         final Task<String> authCodeTask = serverClientId == null
                 ? Tasks.forResult(null)
-                : signInClient.requestServerSideAccess(serverClientId, false);
+                : requestServerAuthCodeWithOpenId(signInClient);
 
         Tasks.whenAllComplete(Arrays.asList(playerTask, authCodeTask)).addOnCompleteListener(new OnCompleteListener<java.util.List<Task<?>>>() {
             @Override
@@ -1001,6 +1007,38 @@ public class GPGS extends CordovaPlugin {
                     handleError(e, callbackContext);
                 }
             }
+        });
+    }
+
+    /**
+     * Request a server auth code that includes OpenID Connect scopes so the backend can obtain an id_token.
+     * Attempts a silent Google Sign-In with the expanded scopes first; if it cannot silently upgrade,
+     * falls back to the Play Games requestServerSideAccess call so login still succeeds.
+     */
+    private Task<String> requestServerAuthCodeWithOpenId(GamesSignInClient signInClient) {
+        GoogleSignInOptions.Builder optionsBuilder = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
+                .requestServerAuthCode(serverClientId, true)
+                .requestIdToken(serverClientId)
+                .requestEmail()
+                .requestProfile()
+                .requestScopes(new Scope("openid"), new Scope(Scopes.EMAIL), new Scope(Scopes.PROFILE));
+
+        GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), optionsBuilder.build());
+
+        Task<GoogleSignInAccount> silentSignIn = googleClient.silentSignIn();
+        Task<String> silentAuthCodeTask = silentSignIn.onSuccessTask(account -> {
+            if (account == null) {
+                return Tasks.forResult(null);
+            }
+            return Tasks.forResult(account.getServerAuthCode());
+        });
+
+        return silentAuthCodeTask.continueWithTask(task -> {
+            if (task.isSuccessful() && task.getResult() != null) {
+                return Tasks.forResult(task.getResult());
+            }
+            // Fall back to Play Games request to keep legacy behavior if silent upgrade failed
+            return signInClient.requestServerSideAccess(serverClientId, true);
         });
     }
 
