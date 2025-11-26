@@ -1080,8 +1080,10 @@ public class GPGS extends CordovaPlugin {
     }
 
     private Task<AuthCodeResult> requestServerAuthCodeWithOpenId(GamesSignInClient signInClient) {
+        final boolean forceNewServerAuthCode = true;
+
         GoogleSignInOptions.Builder optionsBuilder = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
-                .requestServerAuthCode(serverClientId, true)
+                .requestServerAuthCode(serverClientId, forceNewServerAuthCode)
                 .requestIdToken(serverClientId)
                 .requestEmail()
                 .requestProfile()
@@ -1109,17 +1111,24 @@ public class GPGS extends CordovaPlugin {
 
             debugLog("GPGS - Silent OpenID upgrade failed, requesting server-side access via Play Games.");
 
+            debugLog("GPGS - Requesting new serverAuthCode via Play Games (forceRefreshToken=" + forceNewServerAuthCode + ").");
+
             // Fall back to Play Games request to keep legacy behavior if silent upgrade failed
-            return signInClient.requestServerSideAccess(serverClientId, true).onSuccessTask(authCode -> {
+            return signInClient.requestServerSideAccess(serverClientId, forceNewServerAuthCode).onSuccessTask(authCode -> {
                 Task<GoogleSignInAccount> postConsentAccount = googleClient.silentSignIn();
                 return postConsentAccount.continueWith(accountTask -> {
-                    List<String> grantedScopeUris = requestedScopeUris;
+                    List<String> grantedScopeUris = Collections.emptyList();
 
                     if (accountTask.isSuccessful() && accountTask.getResult() != null) {
-                        List<String> scopes = scopeUrisFromSet(accountTask.getResult().getGrantedScopes());
-                        if (!scopes.isEmpty()) {
-                            grantedScopeUris = scopes;
-                        }
+                        grantedScopeUris = scopeUrisFromSet(accountTask.getResult().getGrantedScopes());
+                    }
+
+                    if (grantedScopeUris.isEmpty()) {
+                        grantedScopeUris = getGrantedScopesFromLastAccount();
+                    }
+
+                    if (grantedScopeUris.isEmpty()) {
+                        debugLog("GPGS - No granted scopes returned after consent; delivering empty scope list.");
                     }
 
                     AuthCodeResult result = new AuthCodeResult(authCode, requestedScopeUris, grantedScopeUris);
