@@ -982,13 +982,9 @@ public class GPGS extends CordovaPlugin {
             @Override
             public void run() {
                 try {
-                    GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
                     GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN);
 
-                    Task<Void> gamesSignOut = gamesSignInClient.signOut();
-                    Task<Void> googleSignOut = googleClient.signOut();
-
-                    Tasks.whenAll(gamesSignOut, googleSignOut)
+                    googleClient.signOut()
                             .addOnSuccessListener(new OnSuccessListener<Void>() {
                                 @Override
                                 public void onSuccess(Void unused) {
@@ -1208,16 +1204,6 @@ public class GPGS extends CordovaPlugin {
             Log.d(TAG, message, throwable);
             sendLogToJs(message);
         }
-    }
-
-    private void sendLogToJs(String message) {
-        if (logCallbackContext == null) {
-            return;
-        }
-
-        PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, message);
-        pluginResult.setKeepCallback(true);
-        logCallbackContext.sendPluginResult(pluginResult);
     }
 
     private void sendLogToJs(String message) {
