@@ -414,16 +414,28 @@ public class GPGS extends CordovaPlugin {
             @Override
             public void run() {
                 try {
-                    GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
-                    gamesSignInClient.signIn().addOnCompleteListener(new OnCompleteListener<AuthenticationResult>() {
+                    final GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
+
+                    gamesSignInClient.isAuthenticated().addOnCompleteListener(new OnCompleteListener<AuthenticationResult>() {
                         @Override
-                        public void onComplete(@NonNull Task<AuthenticationResult> task) {
-                            if (task.isSuccessful()) {
+                        public void onComplete(@NonNull Task<AuthenticationResult> authTask) {
+                            if (authTask.isSuccessful() && authTask.getResult().isAuthenticated()) {
                                 wasSignedIn = true;
                                 deliverSignInPayload(callbackContext);
-                            } else {
-                                handleError(task.getException(), callbackContext);
+                                return;
                             }
+
+                            gamesSignInClient.signIn().addOnCompleteListener(new OnCompleteListener<AuthenticationResult>() {
+                                @Override
+                                public void onComplete(@NonNull Task<AuthenticationResult> task) {
+                                    if (task.isSuccessful()) {
+                                        wasSignedIn = true;
+                                        deliverSignInPayload(callbackContext);
+                                    } else {
+                                        handleError(task.getException(), callbackContext);
+                                    }
+                                }
+                            });
                         }
                     });
                 } catch (Exception e) {
