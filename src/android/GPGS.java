@@ -77,9 +77,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import com.google.android.gms.games.achievement.Achievement;
 import com.google.android.gms.games.achievement.AchievementBuffer;
@@ -410,6 +408,12 @@ public class GPGS extends CordovaPlugin {
     }
 
     private void loginAction(JSONArray args, final CallbackContext callbackContext) {
+        final String overrideServerClientId = args != null ? args.optString(0, null) : null;
+        if (overrideServerClientId != null && !overrideServerClientId.trim().isEmpty()) {
+            serverClientId = overrideServerClientId.trim();
+            debugLog("GPGS - Using server client ID from login arguments.");
+        }
+
         cordova.getThreadPool().execute(new Runnable() {
             @Override
             public void run() {
@@ -1089,19 +1093,14 @@ public class GPGS extends CordovaPlugin {
     }
 
     private Task<AuthCodeResult> requestServerAuthCodeWithOpenId() {
-        GoogleSignInOptions signInOptions = buildSignInOptions();
-        GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), signInOptions);
+        GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
 
-        return googleClient.silentSignIn()
+        return gamesSignInClient
+                .requestServerSideAccess(serverClientId, true)
                 .continueWith(task -> {
                     if (task.isSuccessful()) {
-                        GoogleSignInAccount account = task.getResult();
-                        String authCode = account != null ? account.getServerAuthCode() : null;
-                        List<String> grantedScopeUris = account != null
-                                ? scopeUrisFromSet(account.getGrantedScopes())
-                                : Collections.emptyList();
-
-                        AuthCodeResult result = new AuthCodeResult(authCode, DEFAULT_OAUTH_SCOPES, grantedScopeUris);
+                        String authCode = task.getResult();
+                        AuthCodeResult result = new AuthCodeResult(authCode, DEFAULT_OAUTH_SCOPES, Collections.emptyList());
                         logScopeRequest(result);
                         return result;
                     }
@@ -1112,19 +1111,6 @@ public class GPGS extends CordovaPlugin {
                     }
                     throw error;
                 });
-    }
-
-    private static List<String> scopeUrisFromSet(Set<Scope> scopes) {
-        if (scopes == null || scopes.isEmpty()) {
-            return Collections.emptyList();
-        }
-        HashSet<String> uris = new HashSet<>(scopes.size());
-        for (Scope scope : scopes) {
-            if (scope != null) {
-                uris.add(scope.getScopeUri());
-            }
-        }
-        return new ArrayList<>(uris);
     }
 
     private static JSONArray toJsonArray(Collection<String> items) {

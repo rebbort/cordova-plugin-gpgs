@@ -135,11 +135,12 @@ var GPGS = {
      * the OAuth scope sets the plugin requested and what Google actually granted. These are the
      * same values logged on Android when `GPGS_DEBUG` is enabled.
      *
+     * @param {{serverClientId?: string}} [options] - Optional overrides such as the web client ID used for server auth code requests.
      * @returns {Promise<{isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string, requestedScopes?: string[], grantedScopes?: string[]}>}
      * Promise that resolves with sign-in details and, when available, scope metadata.
      */
-    login: function() {
-        return callNative('login');
+    login: function(options) {
+        return callNative('login', [options && options.serverClientId]);
     },
 
     /**
