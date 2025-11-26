@@ -52,6 +52,36 @@ var GPGS = {
     },
 
     /**
+     * Stream native debug logs to a JavaScript callback (e.g., console logging in a browser).
+     * Requires the `GPGS_DEBUG` preference to be `true` so native logging is enabled.
+     *
+     * @param {function(string): void} listener - Callback that receives log lines.
+     */
+    setLogger: function(listener) {
+        if (typeof listener !== 'function') {
+            throw new Error('GPGS.setLogger expects a function');
+        }
+
+        // The native side keeps the callback alive and pushes log strings to it.
+        exec(function(message) {
+            try {
+                listener(message);
+            } catch (err) {
+                console.error('GPGS logger callback failed', err);
+            }
+        }, function(error) {
+            console.error('GPGS logger error', error);
+        }, 'GPGS', 'setLogger', [true]);
+    },
+
+    /**
+     * Stop streaming native debug logs to JavaScript.
+     */
+    clearLogger: function() {
+        exec(function() {}, function() {}, 'GPGS', 'setLogger', [false]);
+    },
+
+    /**
      * Check if Google Play Services are available
      * @returns {Promise<boolean|Object>} Promise that resolves with availability status.
      * If services are not available, returns an object with detailed error information:
@@ -99,12 +129,27 @@ var GPGS = {
     },
 
     /**
-     * Sign in to Google Play Games
-     * @returns {Promise<{isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string}>} Promise that resolves with sign-in details
+     * Sign in to Google Play Games.
+     * When `SERVER_CLIENT_ID` is set during plugin installation, the resolved payload also includes
+     * the OAuth scope sets the plugin requested and what Google actually granted. These are the
+     * same values logged on Android when `GPGS_DEBUG` is enabled.
+     *
+     * @returns {Promise<{isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string, requestedScopes?: string[], grantedScopes?: string[]}>}
+     * Promise that resolves with sign-in details and, when available, scope metadata.
      */
     login: function() {
         return new Promise((resolve, reject) => {
             exec(resolve, reject, 'GPGS', 'login', []);
+        });
+    },
+
+    /**
+     * Sign out the current player from Google Play Games and clear cached Google Sign-In state.
+     * @returns {Promise<void>} Promise that resolves when sign-out completes.
+     */
+    signOut: function() {
+        return new Promise((resolve, reject) => {
+            exec(resolve, reject, 'GPGS', 'signOut', []);
         });
     },
 
