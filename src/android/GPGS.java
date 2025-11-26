@@ -28,6 +28,7 @@ import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.Scopes;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -389,7 +390,7 @@ public class GPGS extends CordovaPlugin {
             } else {
                 Exception error = task.getException();
                 if (error == null) {
-                    error = new ApiException(com.google.android.gms.common.api.CommonStatusCodes.ERROR);
+                    error = new ApiException(new Status(com.google.android.gms.common.api.CommonStatusCodes.ERROR));
                 }
                 tcs.setException(error);
             }
