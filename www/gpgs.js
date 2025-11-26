@@ -36,6 +36,19 @@
 
 var exec = require('cordova/exec');
 
+/**
+ * Helper to call the native side without repeating the Promise boilerplate.
+ *
+ * @param {string} action - Native action name
+ * @param {Array} [args=[]] - Arguments passed to the native side
+ * @returns {Promise<any>} Resolves with the native success payload
+ */
+function callNative(action, args) {
+    return new Promise((resolve, reject) => {
+        exec(resolve, reject, 'GPGS', action, args || []);
+    });
+}
+
 /* eslint-disable */
 // noinspection JSAnnotator
 
@@ -93,21 +106,14 @@ var GPGS = {
      * }
      */
     isGooglePlayServicesAvailable: function() {
-        return new Promise((resolve, reject) => {
-            exec(function(result) {
-                // If result is true, services are available
-                if (result === true) {
-                    resolve(true);
-                } 
-                // If result is an object, it contains error details
-                else if (typeof result === 'object' && result !== null) {
-                    resolve(result.isAvailable);
-                }
-                // Fallback to boolean conversion
-                else {
-                    resolve(result);
-                }
-            }, reject, 'GPGS', 'isGooglePlayServicesAvailable', []);
+        return callNative('isGooglePlayServicesAvailable').then(result => {
+            if (result === true) {
+                return true;
+            }
+            if (typeof result === 'object' && result !== null) {
+                return result.isAvailable ?? result.available ?? false;
+            }
+            return !!result;
         });
     },
 
@@ -116,15 +122,10 @@ var GPGS = {
      * @returns {Promise<boolean>} Promise that resolves with sign-in status
      */
     isSignedIn: function() {
-        return new Promise((resolve, reject) => {
-            exec(function(result) {
-                // Handle both object and boolean responses
-                if (typeof result === 'object' && result !== null) {
-                    resolve(result.isSignedIn);
-                } else {
-                    resolve(result);
-                }
-            }, reject, 'GPGS', 'isSignedIn', []);
+        return callNative('isSignedIn').then(result => {
+            return (typeof result === 'object' && result !== null)
+                ? result.isSignedIn
+                : !!result;
         });
     },
 
@@ -138,9 +139,7 @@ var GPGS = {
      * Promise that resolves with sign-in details and, when available, scope metadata.
      */
     login: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'login', []);
-        });
+        return callNative('login');
     },
 
     /**
@@ -148,9 +147,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when sign-out completes.
      */
     signOut: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'signOut', []);
-        });
+        return callNative('signOut');
     },
 
     /**
@@ -159,9 +156,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when achievement is unlocked
      */
     unlockAchievement: function(achievementId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'unlockAchievement', [achievementId]);
-        });
+        return callNative('unlockAchievement', [achievementId]);
     },
 
     /**
@@ -171,9 +166,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when achievement is incremented
      */
     incrementAchievement: function(achievementId, numSteps) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'incrementAchievement', [achievementId, numSteps]);
-        });
+        return callNative('incrementAchievement', [achievementId, numSteps]);
     },
 
     /**
@@ -181,9 +174,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when UI is closed
      */
     showAchievements: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'showAchievements', []);
-        });
+        return callNative('showAchievements');
     },
 
     /**
@@ -192,9 +183,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when achievement is revealed
      */
     revealAchievement: function(achievementId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'revealAchievement', [achievementId]);
-        });
+        return callNative('revealAchievement', [achievementId]);
     },
 
     /**
@@ -204,9 +193,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when steps are set
      */
     setStepsInAchievement: function(achievementId, steps) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'setStepsInAchievement', [achievementId, steps]);
-        });
+        return callNative('setStepsInAchievement', [achievementId, steps]);
     },
 
     /**
@@ -215,9 +202,7 @@ var GPGS = {
      * @returns {Promise<Array>} Promise that resolves with an array of achievement objects
      */
     loadAchievements: function(forceReload) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'loadAchievements', [forceReload || false]);
-        });
+        return callNative('loadAchievements', [forceReload || false]);
     },
 
     /**
@@ -227,9 +212,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when score is submitted
      */
     submitScore: function(leaderboardId, score) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'updatePlayerScore', [leaderboardId, score]);
-        });
+        return callNative('updatePlayerScore', [leaderboardId, score]);
     },
 
     /**
@@ -238,9 +221,7 @@ var GPGS = {
      * @returns {Promise<number>} Promise that resolves with the player's score
      */
     getPlayerScore: function(leaderboardId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'loadPlayerScore', [leaderboardId]);
-        });
+        return callNative('loadPlayerScore', [leaderboardId]);
     },
 
     /**
@@ -249,9 +230,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when UI is closed
      */
     showLeaderboard: function(leaderboardId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'showLeaderboard', [leaderboardId]);
-        });
+        return callNative('showLeaderboard', [leaderboardId]);
     },
 
     /**
@@ -259,9 +238,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when UI is closed
      */
     showAllLeaderboards: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'showAllLeaderboards', []);
-        });
+        return callNative('showAllLeaderboards');
     },
 
     /**
@@ -273,9 +250,7 @@ var GPGS = {
      * @returns {Promise<Object>} Promise that resolves with leaderboard scores
      */
     loadTopScores: function(leaderboardId, timeSpan, collection, maxResults) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'loadTopScores', [leaderboardId, timeSpan, collection, maxResults]);
-        });
+        return callNative('loadTopScores', [leaderboardId, timeSpan, collection, maxResults]);
     },
 
     /**
@@ -287,9 +262,7 @@ var GPGS = {
      * @returns {Promise<Object>} Promise that resolves with leaderboard scores
      */
     loadPlayerCenteredScores: function(leaderboardId, timeSpan, collection, maxResults) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'loadPlayerCenteredScores', [leaderboardId, timeSpan, collection, maxResults]);
-        });
+        return callNative('loadPlayerCenteredScores', [leaderboardId, timeSpan, collection, maxResults]);
     },
 
     /**
@@ -298,9 +271,7 @@ var GPGS = {
      * @returns {Promise<Object|Array>} Promise that resolves with leaderboard metadata
      */
     loadLeaderboardMetadata: function(leaderboardId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'loadLeaderboardMetadata', leaderboardId ? [leaderboardId] : []);
-        });
+        return callNative('loadLeaderboardMetadata', leaderboardId ? [leaderboardId] : []);
     },
 
     /**
@@ -313,14 +284,12 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when UI is closed
      */
     showSavedGames: function(options) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'showSavedGames', [
-                options.title,
-                options.allowAddButton,
-                options.allowDelete,
-                options.maxSnapshots
-            ]);
-        });
+        return callNative('showSavedGames', [
+            options.title,
+            options.allowAddButton,
+            options.allowDelete,
+            options.maxSnapshots
+        ]);
     },
 
     /**
@@ -331,9 +300,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when save is complete
      */
     saveGame: function(snapshotName, description, data) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'saveGame', [snapshotName, description, data]);
-        });
+        return callNative('saveGame', [snapshotName, description, data]);
     },
 
     /**
@@ -342,9 +309,7 @@ var GPGS = {
      * @returns {Promise<Object>} Promise that resolves with the saved data
      */
     loadGame: function(snapshotName) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'loadGameSave', [snapshotName]);
-        });
+        return callNative('loadGameSave', [snapshotName]);
     },
 
     /**
@@ -353,9 +318,7 @@ var GPGS = {
      * @returns {Promise<string>} Promise that resolves with the snapshot ID on success
      */
     deleteSnapshot: function(snapshotName) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'deleteSnapshot', [snapshotName]);
-        });
+        return callNative('deleteSnapshot', [snapshotName]);
     },
 
     /**
@@ -364,9 +327,7 @@ var GPGS = {
      * @returns {Promise<Array>} Promise that resolves with an array of snapshot metadata objects
      */
     loadAllSnapshots: function(forceReload) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'loadAllSnapshots', [forceReload || false]);
-        });
+        return callNative('loadAllSnapshots', [forceReload || false]);
     },
 
     /**
@@ -374,9 +335,7 @@ var GPGS = {
      * @returns {Promise<Array>} Promise that resolves with array of friend objects
      */
     getFriendsList: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'getFriendsList', []);
-        });
+        return callNative('getFriendsList');
     },
 
     /**
@@ -385,9 +344,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when UI is closed
      */
     showPlayerProfile: function(playerId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'showAnotherPlayersProfile', [playerId]);
-        });
+        return callNative('showAnotherPlayersProfile', [playerId]);
     },
 
     /**
@@ -395,9 +352,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when UI is closed
      */
     showPlayerSearch: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'showPlayerSearch', []);
-        });
+        return callNative('showPlayerSearch');
     },
 
     /**
@@ -406,9 +361,7 @@ var GPGS = {
      * @returns {Promise<Object>} Promise that resolves with player info
      */
     getPlayerInfo: function(playerId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'getPlayer', [playerId || '']);
-        });
+        return callNative('getPlayer', [playerId || '']);
     },
 
     /**
@@ -416,9 +369,7 @@ var GPGS = {
      * @returns {Promise<Object>} Promise that resolves with player stats
      */
     getPlayerStats: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'getCurrentPlayerStats', []);
-        });
+        return callNative('getCurrentPlayerStats');
     },
 
     /**
@@ -428,9 +379,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when event is incremented
      */
     incrementEvent: function(eventId, amount) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'incrementEvent', [eventId, amount]);
-        });
+        return callNative('incrementEvent', [eventId, amount]);
     },
 
     /**
@@ -438,9 +387,7 @@ var GPGS = {
      * @returns {Promise<Array>} Promise that resolves with array of events
      */
     getAllEvents: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'getAllEvents', []);
-        });
+        return callNative('getAllEvents');
     },
 
     /**
@@ -449,9 +396,7 @@ var GPGS = {
      * @returns {Promise<Object>} Promise that resolves with event data
      */
     getEvent: function(eventId) {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'getEvent', [eventId]);
-        });
+        return callNative('getEvent', [eventId]);
     },
 
     /**
@@ -460,9 +405,7 @@ var GPGS = {
      * @returns {Promise<void>} Promise that resolves when initialization request is sent.
      */
     initialize: function() {
-        return new Promise((resolve, reject) => {
-            exec(resolve, reject, 'GPGS', 'initialize', []);
-        });
+        return callNative('initialize');
     }
 };
 
