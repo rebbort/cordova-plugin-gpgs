@@ -26,6 +26,7 @@ import androidx.annotation.Nullable;
 
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.Scopes;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.common.api.Status;
@@ -103,6 +104,10 @@ public class GPGS extends CordovaPlugin {
 
     private static final int ERROR_CODE_HAS_RESOLUTION = 1;
     private static final int ERROR_CODE_NO_RESOLUTION = 2;
+
+    private static final List<String> DEFAULT_OAUTH_SCOPES = Collections.unmodifiableList(
+            Arrays.asList(Scopes.OPEN_ID, Scopes.PROFILE)
+    );
 
     private CordovaWebView cordovaWebView;
     private boolean wasSignedIn = false;
@@ -976,7 +981,7 @@ public class GPGS extends CordovaPlugin {
             @Override
             public void run() {
                 try {
-                    GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN);
+                    GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), buildSignInOptions());
 
                     googleClient.signOut()
                             .addOnSuccessListener(new OnSuccessListener<Void>() {
@@ -1071,15 +1076,20 @@ public class GPGS extends CordovaPlugin {
         }
     }
 
-    // Use the Play Games server-side access API to avoid repeated Google account pickers while retrieving a server auth code.
     private Task<AuthCodeResult> requestServerAuthCodeWithOpenId() {
-        GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
-        List<String> grantedScopeUris = getGrantedScopesFromLastAccount();
+        GoogleSignInOptions signInOptions = buildSignInOptions();
+        GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), signInOptions);
 
-        return gamesSignInClient.requestServerSideAccess(serverClientId, false)
+        return googleClient.silentSignIn()
                 .continueWith(task -> {
                     if (task.isSuccessful()) {
-                        AuthCodeResult result = new AuthCodeResult(task.getResult(), Collections.emptyList(), grantedScopeUris);
+                        GoogleSignInAccount account = task.getResult();
+                        String authCode = account != null ? account.getServerAuthCode() : null;
+                        List<String> grantedScopeUris = account != null
+                                ? scopeUrisFromSet(account.getGrantedScopes())
+                                : Collections.emptyList();
+
+                        AuthCodeResult result = new AuthCodeResult(authCode, DEFAULT_OAUTH_SCOPES, grantedScopeUris);
                         logScopeRequest(result);
                         return result;
                     }
@@ -1090,14 +1100,6 @@ public class GPGS extends CordovaPlugin {
                     }
                     throw error;
                 });
-    }
-
-    private List<String> getGrantedScopesFromLastAccount() {
-        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(cordova.getActivity());
-        if (account == null || account.getGrantedScopes() == null) {
-            return Collections.emptyList();
-        }
-        return scopeUrisFromSet(account.getGrantedScopes());
     }
 
     private static List<String> scopeUrisFromSet(Set<Scope> scopes) {
@@ -1140,6 +1142,17 @@ public class GPGS extends CordovaPlugin {
     private void logScopeRequest(AuthCodeResult result) {
         debugLog("GPGS - Requested scopes: " + result.requestedScopes.toString());
         debugLog("GPGS - Granted scopes: " + result.grantedScopes.toString());
+    }
+
+    private GoogleSignInOptions buildSignInOptions() {
+        GoogleSignInOptions.Builder builder = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
+                .requestScopes(new Scope(Scopes.OPEN_ID), new Scope(Scopes.PROFILE));
+
+        if (serverClientId != null) {
+            builder.requestServerAuthCode(serverClientId, false);
+        }
+
+        return builder.build();
     }
 
     private String getStringResource(String resourceName) {
