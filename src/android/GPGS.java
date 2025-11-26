@@ -89,7 +89,7 @@ import com.google.android.gms.games.LeaderboardsClient.LeaderboardScores;
 public class GPGS extends CordovaPlugin {
 
     private static final String TAG = "GOOGLE_PLAY_GAMES";
-    private boolean debugMode = true;
+    private boolean debugMode = false;
 
     private static final int RC_ACHIEVEMENT_UI = 9003;
     private static final int RC_LEADERBOARD_UI = 9004;
@@ -1608,3 +1608,4 @@ public class GPGS extends CordovaPlugin {
         } catch (Exception ignored) { }
     }
 } 
+
