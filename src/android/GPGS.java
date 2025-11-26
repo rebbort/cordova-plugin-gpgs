@@ -1106,13 +1106,26 @@ public class GPGS extends CordovaPlugin {
                 logScopeRequest(task.getResult());
                 return Tasks.forResult(task.getResult());
             }
+
+            debugLog("GPGS - Silent OpenID upgrade failed, requesting server-side access via Play Games.");
+
             // Fall back to Play Games request to keep legacy behavior if silent upgrade failed
-            return signInClient.requestServerSideAccess(serverClientId, true).continueWith(accessTask -> {
-                String authCode = accessTask.getResult();
-                List<String> grantedScopeUris = getGrantedScopesFromLastAccount();
-                AuthCodeResult result = new AuthCodeResult(authCode, requestedScopeUris, grantedScopeUris);
-                logScopeRequest(result);
-                return result;
+            return signInClient.requestServerSideAccess(serverClientId, true).onSuccessTask(authCode -> {
+                Task<GoogleSignInAccount> postConsentAccount = googleClient.silentSignIn();
+                return postConsentAccount.continueWith(accountTask -> {
+                    List<String> grantedScopeUris = requestedScopeUris;
+
+                    if (accountTask.isSuccessful() && accountTask.getResult() != null) {
+                        List<String> scopes = scopeUrisFromSet(accountTask.getResult().getGrantedScopes());
+                        if (!scopes.isEmpty()) {
+                            grantedScopeUris = scopes;
+                        }
+                    }
+
+                    AuthCodeResult result = new AuthCodeResult(authCode, requestedScopeUris, grantedScopeUris);
+                    logScopeRequest(result);
+                    return result;
+                });
             });
         });
     }
