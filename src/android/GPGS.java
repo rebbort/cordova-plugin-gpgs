@@ -1113,13 +1113,18 @@ public class GPGS extends CordovaPlugin {
             return signInClient.requestServerSideAccess(serverClientId, true).onSuccessTask(authCode -> {
                 Task<GoogleSignInAccount> postConsentAccount = googleClient.silentSignIn();
                 return postConsentAccount.continueWith(accountTask -> {
-                    List<String> grantedScopeUris = requestedScopeUris;
+                    List<String> grantedScopeUris = Collections.emptyList();
 
                     if (accountTask.isSuccessful() && accountTask.getResult() != null) {
-                        List<String> scopes = scopeUrisFromSet(accountTask.getResult().getGrantedScopes());
-                        if (!scopes.isEmpty()) {
-                            grantedScopeUris = scopes;
-                        }
+                        grantedScopeUris = scopeUrisFromSet(accountTask.getResult().getGrantedScopes());
+                    }
+
+                    if (grantedScopeUris.isEmpty()) {
+                        grantedScopeUris = getGrantedScopesFromLastAccount();
+                    }
+
+                    if (grantedScopeUris.isEmpty()) {
+                        debugLog("GPGS - No granted scopes returned after consent; delivering empty scope list.");
                     }
 
                     AuthCodeResult result = new AuthCodeResult(authCode, requestedScopeUris, grantedScopeUris);
