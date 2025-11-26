@@ -144,6 +144,16 @@ var GPGS = {
     },
 
     /**
+     * Sign out the current player from Google Play Games and clear cached Google Sign-In state.
+     * @returns {Promise<void>} Promise that resolves when sign-out completes.
+     */
+    signOut: function() {
+        return new Promise((resolve, reject) => {
+            exec(resolve, reject, 'GPGS', 'signOut', []);
+        });
+    },
+
+    /**
      * Unlock an achievement
      * @param {string} achievementId - ID of the achievement to unlock
      * @returns {Promise<void>} Promise that resolves when achievement is unlocked

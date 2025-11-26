@@ -207,6 +207,10 @@ public class GPGS extends CordovaPlugin {
             this.setLoggerAction(args.optBoolean(0, true), callbackContext);
             return true;
         }
+        else if (action.equals("signOut")) {
+            this.signOutAction(callbackContext);
+            return true;
+        }
         else if (action.equals("unlockAchievement")) {
             this.unlockAchievementAction(args.getString(0), callbackContext);
             return true;
@@ -973,6 +977,39 @@ public class GPGS extends CordovaPlugin {
         });
     }
 
+    private void signOutAction(final CallbackContext callbackContext) {
+        cordova.getThreadPool().execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
+                    GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN);
+
+                    Task<Void> gamesSignOut = gamesSignInClient.signOut();
+                    Task<Void> googleSignOut = googleClient.signOut();
+
+                    Tasks.whenAll(gamesSignOut, googleSignOut)
+                            .addOnSuccessListener(new OnSuccessListener<Void>() {
+                                @Override
+                                public void onSuccess(Void unused) {
+                                    wasSignedIn = false;
+                                    emitSignOutEvent("user_signout");
+                                    callbackContext.success();
+                                }
+                            })
+                            .addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception e) {
+                                    handleError(e, callbackContext);
+                                }
+                            });
+                } catch (Exception e) {
+                    handleError(e, callbackContext);
+                }
+            }
+        });
+    }
+
     private void deliverSignInPayload(@Nullable final CallbackContext callbackContext) {
         final GamesSignInClient signInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
         final PlayersClient playersClient = PlayGames.getPlayersClient(cordova.getActivity());
@@ -1171,6 +1208,16 @@ public class GPGS extends CordovaPlugin {
             Log.d(TAG, message, throwable);
             sendLogToJs(message);
         }
+    }
+
+    private void sendLogToJs(String message) {
+        if (logCallbackContext == null) {
+            return;
+        }
+
+        PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, message);
+        pluginResult.setKeepCallback(true);
+        logCallbackContext.sendPluginResult(pluginResult);
     }
 
     private void sendLogToJs(String message) {
@@ -1523,6 +1570,7 @@ public class GPGS extends CordovaPlugin {
     private void emitSignOutEvent(String reason) {
         try {
             JSONObject payload = new JSONObject();
+            payload.put("isSignedIn", false);
             payload.put("reason", reason);
             emitWindowEvent(EVENT_SIGN_OUT, payload);
         } catch (JSONException ignored) { }

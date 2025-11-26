@@ -128,6 +128,8 @@ The plugin NO LONGER attempts silent sign-in automatically; you are in full cont
 
 The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`. When a server client ID is present, the payload also includes the scopes the plugin asked for and what Google actually granted: `requestedScopes` and `grantedScopes` (arrays of scope URIs).
 
+> Note: `grantedScopes` can be empty even when sign-in succeeds. This happens when Google cannot silently upgrade to full Google Sign-In with the OpenID scopes and the plugin falls back to the Play Games `requestServerSideAccess` call. In that path the SDK only exposes scopes from the *previously* signed-in Google account (if any), so you will see an empty list when there is no cached Google sign-in. To force consent and get a non-empty list, sign out and sign in again so Google prompts for `openid email profile` with your server client ID.
+
 ### Authentication
 
 ```javascript
@@ -181,6 +183,14 @@ GPGS.login().then(result => {
     console.error('Sign-in failed:', error);
 });
 // Returns: Promise<{ isSignedIn: boolean, playerId?: string, username?: string, serverAuthCode?: string, requestedScopes?: string[], grantedScopes?: string[] }>
+
+// Manual sign-out (also triggers the gpgs.signout event with { isSignedIn: false, reason: 'user_signout' })
+GPGS.signOut().then(() => {
+    console.log('Signed out');
+}).catch(error => {
+    console.error('Sign-out failed:', error);
+});
+// Returns: Promise<void>
 ```
 
 ### Leaderboards
