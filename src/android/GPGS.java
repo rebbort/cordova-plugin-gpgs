@@ -40,6 +40,8 @@ import com.google.android.gms.games.EventsClient;
 import com.google.android.gms.games.GamesSignInClient;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
+import com.google.android.gms.games.gamessignin.AuthResponse;
+import com.google.android.gms.games.gamessignin.AuthScope;
 import com.google.android.gms.games.Player;
 import com.google.android.gms.games.PlayerBuffer;
 import com.google.android.gms.games.PlayersClient;
@@ -87,7 +89,7 @@ import com.google.android.gms.games.LeaderboardsClient.LeaderboardScores;
 public class GPGS extends CordovaPlugin {
 
     private static final String TAG = "GOOGLE_PLAY_GAMES";
-    private boolean debugMode = false;
+    private boolean debugMode = true;
 
     private static final int RC_ACHIEVEMENT_UI = 9003;
     private static final int RC_LEADERBOARD_UI = 9004;
@@ -1097,16 +1099,29 @@ public class GPGS extends CordovaPlugin {
     }
 
     private Task<AuthCodeResult> requestServerAuthCodeWithOpenId() {
+        // Use GamesSignInClient.requestServerSideAccess with OAuth scopes
         GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
-
+        
+        // Create list of AuthScope for OAuth scopes
+        List<AuthScope> scopes = Arrays.asList(AuthScope.EMAIL, AuthScope.PROFILE, AuthScope.OPEN_ID);
+        
         return gamesSignInClient
-                .requestServerSideAccess(serverClientId, true)
+                .requestServerSideAccess(serverClientId, false, scopes)
                 .continueWith(task -> {
                     if (task.isSuccessful()) {
-                        String authCode = task.getResult();
-                        Collection<String> requested = getRequestedScopeUris();
-                        Collection<String> granted = getGrantedScopeUris();
-                        AuthCodeResult result = new AuthCodeResult(authCode, requested, granted);
+                        AuthResponse authResponse = task.getResult();
+                        String authCode = authResponse.getAuthCode();
+                        List<AuthScope> grantedScopes = authResponse.getGrantedScopes();
+                        
+                        // Convert AuthScope enum to scope names
+                        List<String> grantedScopeNames = new ArrayList<>();
+                        for (AuthScope scope : grantedScopes) {
+                            // AuthScope is enum with EMAIL, PROFILE, OPEN_ID
+                            grantedScopeNames.add(scope.name().toLowerCase().replace("_", ""));
+                        }
+                        
+                        Collection<String> requested = Arrays.asList("openid", "profile", "email");
+                        AuthCodeResult result = new AuthCodeResult(authCode, requested, grantedScopeNames);
                         logScopeRequest(result);
                         return result;
                     }
