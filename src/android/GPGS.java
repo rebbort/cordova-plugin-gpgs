@@ -1220,6 +1220,16 @@ public class GPGS extends CordovaPlugin {
         logCallbackContext.sendPluginResult(pluginResult);
     }
 
+    private void sendLogToJs(String message) {
+        if (logCallbackContext == null) {
+            return;
+        }
+
+        PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, message);
+        pluginResult.setKeepCallback(true);
+        logCallbackContext.sendPluginResult(pluginResult);
+    }
+
     private void handleError(Exception e, CallbackContext callbackContext) {
         if (callbackContext == null) {
             debugLog("GPGS Error: " + e.getMessage(), e);
