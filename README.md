@@ -77,10 +77,9 @@ cordova plugin add https://github.com/<org-or-user>/cordova-plugin-gpgs.git#main
 
 - `APP_ID` (required): Your Google Play Games App ID
 - `PLAY_SERVICES_VERSION` (optional): Version of Google Play Services to use (default: 23.2.0)
-- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens. When provided, the plugin now silently requests the OpenID Connect scopes (`openid email profile`) and ID token along with the server auth code so your backend receives an `id_token` during the exchange.
-  - If Google cannot silently upgrade to Google Sign-In with those OpenID Connect scopes, the plugin will launch a Google consent screen using the same configuration so the returned `serverAuthCode` and `id_token` include the expected `openid email profile` scopes.
+- `SERVER_CLIENT_ID` (optional): OAuth 2.0 server client ID used to request `serverAuthCode` during login. Use the **Web application** client ID from the Google Cloud project linked to your Play Games Services game (Play Console → Game configuration → Linked apps → Google Cloud → Credentials). This is the value your backend will exchange for tokens. When provided, the plugin follows the [official Play Games guidance](https://developer.android.com/games/pgs/android/server-access#get-auth-code) and calls `GamesSignInClient.requestServerSideAccess()` after Play Games sign-in. This reuses the player's chosen Play Games profile instead of repeatedly launching a Google account picker.
 
-  **How to obtain `SERVER_CLIENT_ID`:**
+**How to obtain `SERVER_CLIENT_ID`:**
   1. Open [Google Cloud Console](https://console.cloud.google.com/) for the project linked to your Play Games Services game (from Play Console → Game configuration → Linked apps → Google Cloud).
   2. Go to **APIs & Services → Credentials**.
   3. Under **OAuth 2.0 Client IDs**, create or pick a **Web application** client.
@@ -127,9 +126,7 @@ document.addEventListener('deviceready', () => {
 
 The plugin NO LONGER attempts silent sign-in automatically; you are in full control of when the operation happens.
 
-The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`. When a server client ID is present, the payload also includes the scopes the plugin asked for and what Google actually granted: `requestedScopes` and `grantedScopes` (arrays of scope URIs).
-
-> Note: `grantedScopes` can be empty even when sign-in succeeds. This happens when Google cannot silently upgrade to full Google Sign-In with the OpenID scopes and the plugin falls back to the Play Games `requestServerSideAccess` call. In that path the SDK only exposes scopes from the *previously* signed-in Google account (if any), so you will see an empty list when there is no cached Google sign-in. To force consent and get a non-empty list, sign out and sign in again so Google prompts for `openid email profile` with your server client ID.
+The `gpgs.signin` event always includes `{ isSignedIn: boolean }` and, after a manual `GPGS.login()` call, also contains `playerId`, `username`, and (when `SERVER_CLIENT_ID` is configured) `serverAuthCode`. For backward compatibility, the payload still provides `requestedScopes` and `grantedScopes`, but the Play Games server-side access API does not expose scope metadata so these arrays are usually empty.
 
 ### Authentication
 

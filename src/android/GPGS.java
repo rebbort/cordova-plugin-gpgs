@@ -29,7 +29,6 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.common.api.Status;
-import com.google.android.gms.common.Scopes;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -61,7 +60,6 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
-import com.google.android.gms.tasks.TaskCompletionSource;
 import com.google.android.gms.tasks.Tasks;
 
 import org.apache.cordova.CallbackContext;
@@ -94,7 +92,6 @@ public class GPGS extends CordovaPlugin {
     private static final int RC_ACHIEVEMENT_UI = 9003;
     private static final int RC_LEADERBOARD_UI = 9004;
     private static final int RC_LEADERBOARDS_UI = 9005;
-    private static final int RC_GOOGLE_AUTH_CODE = 9006;
     private static final int RC_SAVED_GAMES = 9009;
     private static final int RC_SHOW_PROFILE = 9010;
     private static final int RC_SHOW_PLAYER_SEARCH = 9011;
@@ -110,8 +107,6 @@ public class GPGS extends CordovaPlugin {
     private CordovaWebView cordovaWebView;
     private boolean wasSignedIn = false;
     private String serverClientId = null;
-    private TaskCompletionSource<AuthCodeResult> pendingAuthCodeResult;
-    private List<String> pendingRequestedScopes = Collections.emptyList();
     private CallbackContext logCallbackContext = null;
 
     @Override
@@ -371,33 +366,6 @@ public class GPGS extends CordovaPlugin {
                 view.loadUrl("javascript:cordova.fireWindowEvent('" + event + "'," + data.toString() + ");");
             }
         });
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-        super.onActivityResult(requestCode, resultCode, intent);
-        if (requestCode == RC_GOOGLE_AUTH_CODE && pendingAuthCodeResult != null) {
-            TaskCompletionSource<AuthCodeResult> tcs = pendingAuthCodeResult;
-            pendingAuthCodeResult = null;
-
-            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(intent);
-            if (task.isSuccessful() && task.getResult() != null) {
-                GoogleSignInAccount account = task.getResult();
-                List<String> grantedScopeUris = scopeUrisFromSet(account.getGrantedScopes());
-                AuthCodeResult result = new AuthCodeResult(account.getServerAuthCode(), pendingRequestedScopes, grantedScopeUris);
-                logScopeRequest(result);
-                tcs.setResult(result);
-            } else {
-                Exception error = task.getException();
-                if (error == null) {
-                    error = new ApiException(new Status(com.google.android.gms.common.api.CommonStatusCodes.ERROR));
-                }
-                tcs.setException(error);
-            }
-
-            pendingRequestedScopes = Collections.emptyList();
-        }
-        // Handle results from Play Games UI activities
     }
 
     private void signInSilently() {
@@ -1085,9 +1053,8 @@ public class GPGS extends CordovaPlugin {
     }
 
     /**
-     * Request a server auth code that includes OpenID Connect scopes so the backend can obtain an id_token.
-     * Attempts a silent Google Sign-In with the expanded scopes first; if it cannot silently upgrade,
-     * prompts the user with Google Sign-In so the returned auth code matches the requested scopes.
+     * Container for server auth code metadata. Scope arrays are present for backward compatibility,
+     * but the Play Games server-side access API typically does not expose additional scope details.
      */
     private static class AuthCodeResult {
         @Nullable
@@ -1104,56 +1071,25 @@ public class GPGS extends CordovaPlugin {
         }
     }
 
+    // Use the Play Games server-side access API to avoid repeated Google account pickers while retrieving a server auth code.
     private Task<AuthCodeResult> requestServerAuthCodeWithOpenId() {
-        GoogleSignInOptions.Builder optionsBuilder = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
-                .requestServerAuthCode(serverClientId, true)
-                .requestIdToken(serverClientId)
-                .requestEmail()
-                .requestProfile()
-                .requestScopes(new Scope(Scopes.OPEN_ID), new Scope(Scopes.EMAIL), new Scope(Scopes.PROFILE));
+        GamesSignInClient gamesSignInClient = PlayGames.getGamesSignInClient(cordova.getActivity());
+        List<String> grantedScopeUris = getGrantedScopesFromLastAccount();
 
-        GoogleSignInOptions signInOptions = optionsBuilder.build();
-        List<String> requestedScopeUris = scopeUrisFromArray(signInOptions.getScopeArray());
+        return gamesSignInClient.requestServerSideAccess(serverClientId, false)
+                .continueWith(task -> {
+                    if (task.isSuccessful()) {
+                        AuthCodeResult result = new AuthCodeResult(task.getResult(), Collections.emptyList(), grantedScopeUris);
+                        logScopeRequest(result);
+                        return result;
+                    }
 
-        GoogleSignInClient googleClient = GoogleSignIn.getClient(cordova.getActivity(), signInOptions);
-
-        Task<GoogleSignInAccount> silentSignIn = googleClient.silentSignIn();
-        Task<AuthCodeResult> silentAuthCodeTask = silentSignIn.onSuccessTask(account -> {
-            if (account == null) {
-                return Tasks.forResult(new AuthCodeResult(null, requestedScopeUris, Collections.emptyList()));
-            }
-            List<String> grantedScopeUris = scopeUrisFromSet(account.getGrantedScopes());
-            return Tasks.forResult(new AuthCodeResult(account.getServerAuthCode(), requestedScopeUris, grantedScopeUris));
-        });
-
-        return silentAuthCodeTask.continueWithTask(task -> {
-            if (task.isSuccessful() && task.getResult() != null && task.getResult().serverAuthCode != null) {
-                logScopeRequest(task.getResult());
-                return Tasks.forResult(task.getResult());
-            }
-
-            debugLog("GPGS - Silent OpenID upgrade failed, requesting Google Sign-In consent.");
-            return startGoogleSignInForAuthCode(googleClient, requestedScopeUris);
-        });
-    }
-
-    private Task<AuthCodeResult> startGoogleSignInForAuthCode(GoogleSignInClient googleClient, List<String> requestedScopeUris) {
-        TaskCompletionSource<AuthCodeResult> tcs = new TaskCompletionSource<>();
-        pendingAuthCodeResult = tcs;
-        pendingRequestedScopes = requestedScopeUris;
-
-        cordova.setActivityResultCallback(this);
-        cordova.getActivity().runOnUiThread(() -> {
-            try {
-                cordova.getActivity().startActivityForResult(googleClient.getSignInIntent(), RC_GOOGLE_AUTH_CODE);
-            } catch (Exception e) {
-                pendingAuthCodeResult = null;
-                pendingRequestedScopes = Collections.emptyList();
-                tcs.setException(e);
-            }
-        });
-
-        return tcs.getTask();
+                    Exception error = task.getException();
+                    if (error == null) {
+                        error = new ApiException(new Status(com.google.android.gms.common.api.CommonStatusCodes.ERROR));
+                    }
+                    throw error;
+                });
     }
 
     private List<String> getGrantedScopesFromLastAccount() {
@@ -1162,19 +1098,6 @@ public class GPGS extends CordovaPlugin {
             return Collections.emptyList();
         }
         return scopeUrisFromSet(account.getGrantedScopes());
-    }
-
-    private static List<String> scopeUrisFromArray(Scope[] scopes) {
-        if (scopes == null || scopes.length == 0) {
-            return Collections.emptyList();
-        }
-        List<String> uris = new ArrayList<>(scopes.length);
-        for (Scope scope : scopes) {
-            if (scope != null) {
-                uris.add(scope.getScopeUri());
-            }
-        }
-        return uris;
     }
 
     private static List<String> scopeUrisFromSet(Set<Scope> scopes) {
